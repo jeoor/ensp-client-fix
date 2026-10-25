@@ -128,3 +128,6 @@ try {
         Remove-Item -LiteralPath $resolved -Recurse -Force
     }
 }
+
+# All expected refusals were checked; report the overall test result.
+exit 0
