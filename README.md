@@ -63,7 +63,9 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".\Repair-eNSP.ps1" -Mod
 首次修复会在工具目录的 backups/ 下保存经过校验的原版文件，按电脑和安装路径分开存放。
 还原时使用同一份工具并保留对应备份。单独还原一项时保留另一项的状态。
 
-## 验证
+## 开发验证
+
+以下测试脚本位于仓库源码的 tests/ 目录。
 
 ~~~powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".\tests\Test-Repair.ps1"
@@ -77,7 +79,17 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".\tests\Test-Repair.ps1
 
 完整测试覆盖四种文件状态与三种修复选择、重复执行、只读检查、损坏备份和文件占用，并解码实际跳转目标，验证剪贴板读取失败路径会到达 CloseClipboard。
 
-测试使用临时副本。剪贴板修改已完成静态分支校验，实际 GUI 故障的复测仍需在 eNSP 中进行。
+测试使用临时副本。
+
+在管理员 Windows PowerShell 5.1 中，可以运行隔离剪贴板对照测试：
+
+~~~powershell
+.\tests\Test-ClipboardFailure.ps1 -EnspPath '完整路径\eNSP_Client.exe'
+~~~
+
+它从本机客户端提取目标函数，在独立窗口站中执行原版和修补后的失败分支，并调用真实 Windows 剪贴板 API。已验证原分支会阻止其他线程访问剪贴板，修补分支会正常释放；打开剪贴板失败时也保持正确行为。
+
+当前验证覆盖文件修补和目标函数失败路径，完整 GUI 使用场景仍待复测。
 
 ## 来源与许可
 
