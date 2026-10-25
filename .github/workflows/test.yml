@@ -1,18 +1,33 @@
-name: Windows PowerShell checks
-
+name: Windows checks
 on:
   push:
+    branches: ['**']
   pull_request:
   workflow_dispatch:
-
+  workflow_call:
 permissions:
   contents: read
-
 jobs:
   safety:
-    runs-on: windows-latest
+    name: PowerShell 5.1 / ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2022, windows-2025]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Report environment
+        shell: powershell
+        run: |
+          [Environment]::OSVersion.VersionString
+          $env:PROCESSOR_ARCHITECTURE
+          $PSVersionTable.PSVersion
       - name: Check syntax and refuse unsupported files
         shell: powershell
         run: .\tests\Test-Repair.ps1
+      - name: Build and test release package
+        shell: powershell
+        run: |
+          $package = .\scripts\New-Release.ps1 -Version v0.0.0-ci -OutputDirectory (Join-Path $env:RUNNER_TEMP 'ensp-package-check')
+          .\tests\Test-Release.ps1 -ArchivePath $package.ArchivePath

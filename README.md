@@ -7,7 +7,7 @@
 
 ## 快速使用
 
-1. 下载源码并完整解压，保存实验、退出 eNSP。
+1. 从 [Releases](https://github.com/jeoor/ensp-client-fix/releases) 下载压缩包并完整解压，保存实验、退出 eNSP。
 2. 双击 **检查.bat** 查看状态，双击 **修复.bat** 应用修复；需要还原时，双击 **还原.bat**。
 3. 修复执行一次即可；写程序目录时会请求 Windows 管理员权限。
 4. 保留工具目录下的 backups/，供还原使用。
@@ -36,7 +36,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".\Repair-eNSP.ps1" -Mod
 
 ## 支持范围
 
-使用 Windows PowerShell 5.1 和系统自带 .NET，面向 Windows 10/11。不同系统版本并未全部实机测试。
+使用 Windows PowerShell 5.1 和系统自带 .NET。验证环境及覆盖项目见下表。
 
 当前支持经过核对的 **eNSP 1.3.00.100** 客户端，文件大小为 3,547,136 字节。版本号相同但文件哈希不同也会拒绝修改。
 
@@ -65,6 +65,12 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".\Repair-eNSP.ps1" -Mod
 
 ## 开发验证
 
+| 环境 | 验证项目 |
+|---|---|
+| Actions：Windows Server 2022 x64 | 脚本语法、未知文件拒绝、发布包和三个 BAT |
+| Actions：Windows Server 2025 x64 | 脚本语法、未知文件拒绝、发布包和三个 BAT |
+| 本机：Windows 11 x64 | 真实文件的 12 种修补组合、还原、备份及独占锁、隔离剪贴板对照 |
+
 以下测试脚本位于仓库源码的 tests/ 目录。
 
 ~~~powershell
@@ -90,6 +96,16 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".\tests\Test-Repair.ps1
 它从本机客户端提取目标函数，在独立窗口站中执行原版和修补后的失败分支，并调用真实 Windows 剪贴板 API。已验证原分支会阻止其他线程访问剪贴板，修补分支会正常释放；打开剪贴板失败时也保持正确行为。
 
 当前验证覆盖文件修补和目标函数失败路径，完整 GUI 使用场景仍待复测。
+
+## 自动发布
+
+推送 v 开头的版本标签后，GitHub Actions 会先通过两套环境的检查，再生成 ZIP 与 SHA256 校验文件并创建 Release。带预发布后缀的标签（如 v0.1.0-beta.1）会创建预发布版本。
+
+本地打包使用同一脚本：
+
+~~~powershell
+.\scripts\New-Release.ps1 -Version v0.1.0-beta.1
+~~~
 
 ## 来源与许可
 

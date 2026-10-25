@@ -8,3 +8,4 @@ repair-*.json
 *.zip
 *.bak
 *.tmp
+dist/
