@@ -1,0 +1,10 @@
+# Local backups and runtime records: never distribute vendor binaries or private paths.
+backups/
+logs/
+repair-*.json
+.test-results/
+*.exe
+*.dll
+*.zip
+*.bak
+*.tmp
