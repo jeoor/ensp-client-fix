@@ -97,16 +97,6 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".\tests\Test-Repair.ps1
 
 当前验证覆盖文件修补和目标函数失败路径，完整 GUI 使用场景仍待复测。
 
-## 自动发布
-
-推送 v 开头的版本标签后，GitHub Actions 会先通过两套环境的检查，再生成 ZIP 与 SHA256 校验文件并创建 Release。带预发布后缀的标签（如 v0.1.0-beta.1）会创建预发布版本。
-
-本地打包使用同一脚本：
-
-~~~powershell
-.\scripts\New-Release.ps1 -Version v0.1.0-beta.1
-~~~
-
 ## 来源与许可
 
 窗口拖动修补原理参考 [Yish：禁止华为 ENSP 启动时关闭 Windows 窗口动画](https://cmxz.top/2541/)。
