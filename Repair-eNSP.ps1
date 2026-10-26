@@ -252,7 +252,7 @@ function Get-RepairErrorText($Failure) {
     $exception = $Failure.Exception
     while ($exception.InnerException) { $exception = $exception.InnerException }
     if ($exception -is [ComponentModel.Win32Exception] -and $exception.NativeErrorCode -eq 1223) {
-        return '已取消管理员授权，本次操作未完成。重新运行后，请在授权弹窗中选择“是”。'
+        return '已取消管理员授权，本次操作未完成。重新运行后，请在授权弹窗中选择[是]。'
     }
     if ($exception -is [UnauthorizedAccessException]) {
         return '访问权限不足，请检查程序、工具和备份目录的权限，并允许管理员授权。'
@@ -264,7 +264,7 @@ function Get-RepairErrorText($Failure) {
 }
 
 function Invoke-EnspRepair {
-    Write-RepairStep 1 '正在查找并校验 eNSP 客户端……'
+    Write-RepairStep 1 '正在查找并校验 eNSP 客户端...'
     $target = Resolve-EnspExecutable $EnspPath
     [byte[]]$before = [IO.File]::ReadAllBytes($target)
     $verified = Get-VerifiedState $before
@@ -321,8 +321,8 @@ function Invoke-EnspRepair {
             '" -NoElevation -ErrorLog "' + $childErrorLog + '"'
         if ($HumanReadable) { $arguments += ' -HumanReadable' }
         $actionLabel = if ($Mode -eq 'Apply') { '修复' } else { '还原' }
-        Write-RepairStep 2 ('正在通过管理员进程执行' + $actionLabel + '……')
-        Write-Host '正在请求管理员权限，请在授权弹窗中选择“是”。'
+        Write-RepairStep 2 ('正在通过管理员进程执行' + $actionLabel + '...')
+        Write-Host '正在请求管理员权限，请在授权弹窗中选择[是]。'
         $child = Start-Process -FilePath $nativePowerShell -ArgumentList $arguments -Verb RunAs -WindowStyle Hidden -Wait -PassThru
         if ($child.ExitCode -ne 0) {
             $detail = if (Test-Path -LiteralPath $childErrorLog) {
@@ -330,7 +330,7 @@ function Invoke-EnspRepair {
             } else { '管理员授权已取消，或管理员进程未能完成操作。' }
             throw $detail
         }
-        Write-RepairStep 3 '正在重新核验客户端文件……'
+        Write-RepairStep 3 '正在重新核验客户端文件...'
         $completed = Get-VerifiedState ([IO.File]::ReadAllBytes($target))
         if ($completed.Hash -ne $required.Hash) {
             throw '管理员操作结束后，文件状态与预期不符，请重新检查客户端。'
@@ -339,8 +339,8 @@ function Invoke-EnspRepair {
         return
     }
 
-    $step = if ($Mode -eq 'Apply') { '正在保存原版备份并修复所选项目……' }
-        else { '正在核对原版备份并还原所选项目……' }
+    $step = if ($Mode -eq 'Apply') { '正在保存原版备份并修复所选项目...' }
+        else { '正在核对原版备份并还原所选项目...' }
     Write-RepairStep 2 $step
     $backupDirectory = Get-BackupLocation $target
     $backupPath = Join-Path $backupDirectory 'eNSP_Client.original.exe'
@@ -384,7 +384,7 @@ function Invoke-EnspRepair {
                 $stream.WriteByte($change.After)
             }
             $stream.Flush($true)
-            Write-RepairStep 3 '正在校验修改后的客户端文件……'
+            Write-RepairStep 3 '正在校验修改后的客户端文件...'
             if ((Get-BytesHash (Read-LockedBytes $stream)) -ne $required.Hash) {
                 throw '写入后文件校验失败，正在尝试恢复操作前的字节。'
             }

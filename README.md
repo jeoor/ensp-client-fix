@@ -5,6 +5,12 @@
 - **窗口拖动效果**：保留 Windows“拖动时显示窗口内容”的设置。
 - **剪贴板释放**：读取文本失败时也释放剪贴板，避免其他软件持续无法复制粘贴。
 
+## 窗口拖动效果对比
+
+| 原版 | 修复后 |
+| :---: | :---: |
+| <img src="https://raw.githubusercontent.com/jeoor/ensp-client-fix/main/assets/window-drag-before.gif" alt="原版 eNSP：拖动窗口时只显示线框" width="420"> | <img src="https://raw.githubusercontent.com/jeoor/ensp-client-fix/main/assets/window-drag-after.gif" alt="修复后：拖动时完整显示窗口内容" width="420"> |
+
 ## 快速使用
 
 1. 从 [Releases](https://github.com/jeoor/ensp-client-fix/releases) 下载压缩包并完整解压，保存实验、退出 eNSP。
