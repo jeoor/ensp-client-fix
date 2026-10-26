@@ -25,6 +25,7 @@ param(
     [string]$Fix = 'All',
     [string]$EnspPath,
     [switch]$NoElevation,
+    [switch]$HumanReadable,
     [string]$ErrorLog
 )
 
@@ -75,7 +76,7 @@ function Resolve-EnspExecutable([string]$RequestedPath) {
             $resolved = Join-Path $resolved 'eNSP_Client.exe'
         }
         if (-not (Test-Path -LiteralPath $resolved -PathType Leaf)) {
-            throw ('eNSP executable not found: ' + $resolved)
+            throw ('找不到 eNSP 程序：' + $resolved)
         }
         return [IO.Path]::GetFullPath($resolved)
     }
@@ -139,9 +140,9 @@ function Resolve-EnspExecutable([string]$RequestedPath) {
     }
     if ($supported.Count -eq 1) { return $supported[0] }
     if ($supported.Count -gt 1) {
-        throw ('Multiple supported installations found. Specify -EnspPath: ' + ($supported -join '; '))
+        throw ('发现多个受支持的安装，请用 -EnspPath 指定一个：' + ($supported -join '; '))
     }
-    throw 'No supported eNSP client found. Use -EnspPath to specify the executable or its folder.'
+    throw '未找到受支持的 eNSP 客户端，请用 -EnspPath 指定程序或安装目录。'
 }
 
 function Get-BackupLocation([string]$Target) {
@@ -168,7 +169,7 @@ function Find-OriginalBackup([string]$Target) {
 function Get-VerifiedState([byte[]]$Bytes) {
     $hash = Get-BytesHash $Bytes
     if ($Bytes.Length -ne 3547136 -or -not $stateTable.ContainsKey($hash)) {
-        throw 'Unsupported or changed eNSP executable. Nothing has been modified.'
+        throw '客户端文件不受支持或已被其他工具修改，已停止操作，未修改文件。'
     }
     $flags = $stateTable[$hash]
     foreach ($definition in $definitions) {
@@ -178,7 +179,7 @@ function Get-VerifiedState([byte[]]$Bytes) {
         } else { $definition.Original }
         for ($index=0; $index -lt $context.Length; $index++) {
             if ($Bytes[$definition.ContextOffset+$index] -ne $context[$index]) {
-                throw ('Unexpected instructions for ' + $definition.Id)
+                throw ('修复位置的指令与预期不符，已停止操作：' + $definition.Id)
             }
         }
     }
@@ -201,12 +202,75 @@ function Get-Status([string]$Target, $Verified) {
     }
 }
 
+function Write-RepairStep([int]$Step, [string]$Message) {
+    if ($HumanReadable) {
+        $total = if ($Mode -eq 'Check') { 2 } else { 3 }
+        Write-Host ('[' + $Step + '/' + $total + '] ' + $Message) -ForegroundColor Cyan
+    }
+}
+
+function Write-RepairResult([string]$Target, $Verified, [bool]$Changed) {
+    $status = Get-Status $Target $Verified
+    if (-not $HumanReadable) {
+        $status | ConvertTo-Json
+        return
+    }
+    $color = 'Green'
+    if ($Mode -eq 'Check') {
+        $summary = switch ($status.State) {
+            'Patched' { '所选项目均已修复。' }
+            'PartiallyPatched' { '所选项目中有一项尚未修复。' }
+            default { '所选项目尚未修复。' }
+        }
+        $headline = '[检查完成] ' + $summary
+        if ($status.State -ne 'Patched') { $color = 'Yellow' }
+    } elseif ($Mode -eq 'Apply') {
+        $headline = if ($Changed) { '[修复成功] 所选项目已修复，文件校验通过。' }
+            else { '[无需修复] 所选项目已经修复，文件校验通过。' }
+    } else {
+        $headline = if ($Changed) { '[还原成功] 所选项目已恢复原版，文件校验通过。' }
+            else { '[无需还原] 所选项目已经是原版，文件校验通过。' }
+    }
+    Write-Host ''
+    Write-Host $headline -ForegroundColor $color
+    Write-Host ''
+    $originalLabel = if ($Mode -eq 'Restore') { '原版' } else { '未修复（原版）' }
+    $visualLabel = if ($status.VisualEffects -eq 'Patched') { '已修复' } else { $originalLabel }
+    $clipboardLabel = if ($status.Clipboard -eq 'Patched') { '已修复' } else { $originalLabel }
+    Write-Host ('窗口拖动：' + $visualLabel)
+    Write-Host ('剪贴板：  ' + $clipboardLabel)
+    if ($Fix -ne 'All') {
+        $selectedLabel = if ($Fix -eq 'Clipboard') { '剪贴板' } else { '窗口拖动' }
+        Write-Host ('本次选择：' + $selectedLabel)
+    }
+    Write-Host ''
+    Write-Host ('程序位置：' + $Target)
+    if ($status.Backup) { Write-Host ('原版备份：' + $status.Backup) }
+}
+
+function Get-RepairErrorText($Failure) {
+    $exception = $Failure.Exception
+    while ($exception.InnerException) { $exception = $exception.InnerException }
+    if ($exception -is [ComponentModel.Win32Exception] -and $exception.NativeErrorCode -eq 1223) {
+        return '已取消管理员授权，本次操作未完成。重新运行后，请在授权弹窗中选择“是”。'
+    }
+    if ($exception -is [UnauthorizedAccessException]) {
+        return '访问权限不足，请检查程序、工具和备份目录的权限，并允许管理员授权。'
+    }
+    if ($exception -is [IO.IOException] -and ($exception.HResult -band 0xFFFF) -in @(32,33)) {
+        return '文件正被占用，请保存实验并退出 eNSP，关闭占用该文件的其他程序后重试。'
+    }
+    return $Failure.Exception.Message
+}
+
 function Invoke-EnspRepair {
+    Write-RepairStep 1 '正在查找并校验 eNSP 客户端……'
     $target = Resolve-EnspExecutable $EnspPath
     [byte[]]$before = [IO.File]::ReadAllBytes($target)
     $verified = Get-VerifiedState $before
     if ($Mode -eq 'Check') {
-        Get-Status $target $verified | ConvertTo-Json
+        Write-RepairStep 2 '文件校验通过，正在汇总状态。'
+        Write-RepairResult $target $verified $false
         return
     }
 
@@ -225,7 +289,7 @@ function Invoke-EnspRepair {
         }
     )
     if ($changes.Count -eq 0) {
-        Get-Status $target $verified | ConvertTo-Json
+        Write-RepairResult $target $verified $false
         return
     }
     $required = Get-VerifiedState $after
@@ -234,7 +298,7 @@ function Invoke-EnspRepair {
         $runningPath = $null
         try { $runningPath = $client.Path } catch { }
         if ($runningPath -and [IO.Path]::GetFullPath($runningPath) -ieq $target) {
-            throw 'Save your experiment and close eNSP before applying or restoring the repair.'
+            throw '请先保存实验并退出 eNSP，再运行修复或还原。'
         }
     }
     # A restricted process-path lookup does not bypass the exclusive file lock below.
@@ -255,31 +319,42 @@ function Invoke-EnspRepair {
         $arguments = '-NoProfile -ExecutionPolicy Bypass -File "' + $PSCommandPath +
             '" -Mode ' + $Mode + ' -Fix ' + $Fix + ' -EnspPath "' + $target +
             '" -NoElevation -ErrorLog "' + $childErrorLog + '"'
-        Write-Host 'Requesting administrator permission for this one-time file modification.'
+        if ($HumanReadable) { $arguments += ' -HumanReadable' }
+        $actionLabel = if ($Mode -eq 'Apply') { '修复' } else { '还原' }
+        Write-RepairStep 2 ('正在通过管理员进程执行' + $actionLabel + '……')
+        Write-Host '正在请求管理员权限，请在授权弹窗中选择“是”。'
         $child = Start-Process -FilePath $nativePowerShell -ArgumentList $arguments -Verb RunAs -WindowStyle Hidden -Wait -PassThru
         if ($child.ExitCode -ne 0) {
             $detail = if (Test-Path -LiteralPath $childErrorLog) {
                 Get-Content -LiteralPath $childErrorLog -Raw
-            } else { 'Administrator permission was cancelled, or the child process could not start.' }
+            } else { '管理员授权已取消，或管理员进程未能完成操作。' }
             throw $detail
         }
-        & $PSCommandPath -Mode Check -Fix $Fix -EnspPath $target
+        Write-RepairStep 3 '正在重新核验客户端文件……'
+        $completed = Get-VerifiedState ([IO.File]::ReadAllBytes($target))
+        if ($completed.Hash -ne $required.Hash) {
+            throw '管理员操作结束后，文件状态与预期不符，请重新检查客户端。'
+        }
+        Write-RepairResult $target $completed $true
         return
     }
 
+    $step = if ($Mode -eq 'Apply') { '正在保存原版备份并修复所选项目……' }
+        else { '正在核对原版备份并还原所选项目……' }
+    Write-RepairStep 2 $step
     $backupDirectory = Get-BackupLocation $target
     $backupPath = Join-Path $backupDirectory 'eNSP_Client.original.exe'
     [void][IO.Directory]::CreateDirectory($backupDirectory)
     if ($Mode -eq 'Apply') {
         if (Test-Path -LiteralPath $backupPath) {
             if ((Get-BytesHash ([IO.File]::ReadAllBytes($backupPath))) -ne $originalHash) {
-                throw 'An unrelated backup already exists. Refusing to overwrite it.'
+                throw '原版备份的校验未通过，已停止操作并保留现有备份。'
             }
         } else {
             [byte[]]$original = $before.Clone()
             foreach ($definition in $definitions) { $original[$definition.Offset] = $definition.Original }
             if ((Get-BytesHash $original) -ne $originalHash) {
-                throw 'Original backup verification failed before writing.'
+                throw '生成原版备份时校验失败，已停止操作，未修改客户端。'
             }
             $backupStream = [IO.File]::Open($backupPath, [IO.FileMode]::CreateNew,
                 [IO.FileAccess]::Write, [IO.FileShare]::None)
@@ -295,13 +370,13 @@ function Invoke-EnspRepair {
     }
     if (-not (Test-Path -LiteralPath $backupPath) -or
         (Get-BytesHash ([IO.File]::ReadAllBytes($backupPath))) -ne $originalHash) {
-        throw 'A verified original backup is required. Nothing has been modified.'
+        throw '缺少有效的原版备份，请保留并使用此前修复时的工具目录；客户端未修改。'
     }
 
     $stream = [IO.File]::Open($target,[IO.FileMode]::Open,[IO.FileAccess]::ReadWrite,[IO.FileShare]::None)
     try {
         if ((Get-BytesHash (Read-LockedBytes $stream)) -ne $verified.Hash) {
-            throw 'The executable changed while preparing the repair.'
+            throw '准备操作期间客户端文件发生变化，已停止写入，请重新检查。'
         }
         try {
             foreach ($change in $changes) {
@@ -309,8 +384,9 @@ function Invoke-EnspRepair {
                 $stream.WriteByte($change.After)
             }
             $stream.Flush($true)
+            Write-RepairStep 3 '正在校验修改后的客户端文件……'
             if ((Get-BytesHash (Read-LockedBytes $stream)) -ne $required.Hash) {
-                throw 'Verification after writing failed.'
+                throw '写入后文件校验失败，正在尝试恢复操作前的字节。'
             }
         } catch {
             $writeFailure = $_
@@ -321,11 +397,11 @@ function Invoke-EnspRepair {
                 }
                 $stream.Flush($true)
                 if ((Get-BytesHash (Read-LockedBytes $stream)) -ne $verified.Hash) {
-                    throw 'Rollback hash verification failed.'
+                    throw '自动恢复操作前字节后的文件校验失败。'
                 }
             } catch {
-                throw ('Repair and automatic rollback failed. Verified original backup: ' +
-                    $backupPath + '. Error: ' + $_.Exception.Message)
+                throw ('文件修改和自动恢复均未完成，请使用已验证的原版备份恢复：' +
+                    $backupPath + '。详细原因：' + $_.Exception.Message)
             }
             throw $writeFailure
         }
@@ -342,17 +418,22 @@ function Invoke-EnspRepair {
     $recordPath = Join-Path $packageRoot ('repair-' + $Mode + '-' +
         (Get-Date -Format 'yyyyMMdd-HHmmss') + '-' + [Guid]::NewGuid().ToString('N').Substring(0,8) + '.json')
     try { $record | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $recordPath -Encoding UTF8 }
-    catch { Write-Warning ('File modification verified, but the audit record could not be saved: ' + $_.Exception.Message) }
-    $record | ConvertTo-Json -Depth 4
+    catch { Write-Warning ('文件修改已校验通过，但操作记录保存失败：' + $_.Exception.Message) }
+    if ($HumanReadable) { Write-RepairResult $target $required $true }
+    else { $record | ConvertTo-Json -Depth 4 }
 }
 
 try {
     Invoke-EnspRepair
 } catch {
+    $detail = Get-RepairErrorText $_
     if ($ErrorLog -and $Mode -ne 'Check') {
-        try { [IO.File]::WriteAllText($ErrorLog,($_ | Out-String),[Text.UTF8Encoding]::new($true)) }
+        try { [IO.File]::WriteAllText($ErrorLog,$detail,[Text.UTF8Encoding]::new($true)) }
         catch { }
     }
-    Write-Error $_ -ErrorAction Continue
+    if ($HumanReadable) {
+        $operation = switch ($Mode) { 'Check' { '检查' }; 'Apply' { '修复' }; 'Restore' { '还原' } }
+        Write-Host ('[' + $operation + '失败] ' + $detail) -ForegroundColor Red
+    } else { Write-Error $_ -ErrorAction Continue }
     exit 1
 }
