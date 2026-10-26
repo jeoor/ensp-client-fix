@@ -10,7 +10,7 @@
 左侧为原版，右侧为修复后。
 
 <p>
-<img src="https://raw.githubusercontent.com/jeoor/ensp-client-fix/main/assets/window-drag-before.gif?v=4" alt="原版 eNSP：拖动窗口时只显示线框" width="50%"><img src="https://raw.githubusercontent.com/jeoor/ensp-client-fix/main/assets/window-drag-after.gif?v=4" alt="修复后：拖动时完整显示窗口内容" width="50%">
+<img src="https://raw.githubusercontent.com/jeoor/ensp-client-fix/main/assets/window-drag-before.gif?v=5" alt="原版 eNSP：拖动窗口时只显示线框" width="50%"><img src="https://raw.githubusercontent.com/jeoor/ensp-client-fix/main/assets/window-drag-after.gif?v=5" alt="修复后：拖动时完整显示窗口内容" width="50%">
 </p>
 
 ## 快速使用
